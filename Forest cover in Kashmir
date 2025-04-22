@@ -1,0 +1,51 @@
+import geopandas as gpd
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from shapely.geometry import Point
+
+# Step 1: Load Natural Earth administrative boundaries
+url = "https://naturalearth.s3.amazonaws.com/10m_cultural/ne_10m_admin_1_states_provinces.zip"
+admin_gdf = gpd.read_file(url)
+
+# Step 2: Filter for Azad Kashmir
+kashmir_gdf = admin_gdf[admin_gdf['admin'] == 'Pakistan']
+kashmir_gdf = kashmir_gdf[kashmir_gdf['name'] == 'Azad Kashmir']
+
+# Step 3: Simulate forest cover points for 2010 and 2020
+np.random.seed(42)
+points_2010 = [Point(x, y) for x, y in zip(
+    np.random.uniform(73.5, 74.5, 1000), np.random.uniform(33.5, 35.0, 1000))]
+points_2020 = [Point(x, y) for x, y in zip(
+    np.random.uniform(73.5, 74.5, 700), np.random.uniform(33.5, 35.0, 700))]  # Simulate deforestation
+
+# Step 4: Convert forest points to GeoDataFrames
+forest_2010_gdf = gpd.GeoDataFrame({'geometry': points_2010, 'year': 2010}, crs="EPSG:4326")
+forest_2020_gdf = gpd.GeoDataFrame({'geometry': points_2020, 'year': 2020}, crs="EPSG:4326")
+
+# Step 5: Spatial join forest points with Kashmir districts
+forest_2010_joined = gpd.sjoin(forest_2010_gdf, kashmir_gdf, how="inner", predicate="within")
+forest_2020_joined = gpd.sjoin(forest_2020_gdf, kashmir_gdf, how="inner", predicate="within")
+
+# Step 6: Calculate forest point counts per district
+forest_2010_counts = forest_2010_joined.groupby('name').size().reset_index(name='forest_2010')
+forest_2020_counts = forest_2020_joined.groupby('name').size().reset_index(name='forest_2020')
+
+# Step 7: Compute forest cover change
+forest_change = forest_2010_counts.merge(forest_2020_counts, on='name', how='outer').fillna(0)
+forest_change['change'] = forest_change['forest_2020'] - forest_change['forest_2010']
+forest_change['percent_change'] = (forest_change['change'] / forest_change['forest_2010']) * 100
+
+# Step 8: Identify district with highest forest loss
+max_loss_district = forest_change.loc[forest_change['change'].idxmin()]
+print("District with highest forest loss:", max_loss_district)
+
+# Step 9: Create a choropleth map of forest loss
+kashmir_gdf = kashmir_gdf.merge(forest_change, on='name', how='left')
+kashmir_gdf.plot(column='percent_change', cmap='Reds', legend=True)
+plt.title("Forest Cover Change in Azad Kashmir (2010-2020)")
+plt.savefig("forest_loss_map.png")
+
+# Step 10: Export results as GeoJSON
+kashmir_gdf.to_file("forest_cover_change_kashmir.geojson", driver="GeoJSON")
+print("Results exported as GeoJSON.")
