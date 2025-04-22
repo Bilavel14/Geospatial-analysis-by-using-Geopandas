@@ -1,0 +1,47 @@
+import geopandas as gpd
+import matplotlib.pyplot as plt
+
+# Step 1: Read the shapefile with the updated path
+gdf = gpd.read_file("C:/PhD/Qgis/Boundry Kashmir - Copy/Administrative_Boundaries-SOP/Administrative_Boundaries-SOP/DISTRICT_BOUNDARY.shp")
+
+# Step 2: Display basic information about the dataset
+print(gdf.info())
+
+# Step 3: Plot the geospatial data
+gdf.plot()
+plt.savefig("district_boundary_plot.png")
+
+# Step 4: Calculate the area of each district
+gdf['area'] = gdf.geometry.area
+print(gdf[['geometry', 'area']])
+
+# Step 5: Find the district with the largest area
+largest_district = gdf.loc[gdf['area'].idxmax()]
+print("Largest district by area:", largest_district)
+
+# Step 6: Buffer the geometries (e.g., 0.1 units)
+gdf_buffered = gdf.copy()
+gdf_buffered['geometry'] = gdf.geometry.buffer(0.1)
+gdf_buffered.plot()
+plt.savefig("buffered_districts.png")
+
+# Step 7: Calculate the centroid of each district
+gdf['centroid'] = gdf.geometry.centroid
+print(gdf[['geometry', 'centroid']])
+
+# Step 8: Perform a spatial join with a hypothetical points dataset
+points = gpd.GeoDataFrame({'geometry': gdf.centroid}, crs=gdf.crs)
+joined = gpd.sjoin(points, gdf, how="inner", predicate="within")
+print(joined.head())
+
+# Step 9: Dissolve boundaries by a common attribute (if available, e.g., a region column)
+if 'region' in gdf.columns:
+    dissolved = gdf.dissolve(by='region')
+    dissolved.plot()
+    plt.savefig("dissolved_regions.png")
+else:
+    print("No 'region' column for dissolve operation.")
+
+# Step 10: Save the modified GeoDataFrame to a new shapefile
+gdf.to_file("DISTRICT_BOUNDARY_modified.shp")
+print("Modified shapefile saved.")
